@@ -1,4 +1,4 @@
-# brand-kit
+# brand-pack
 
 A Claude skill that turns a customer's or prospect's website URL into a zipped brand pack, so vibe-coded mockups in Lovable, v0, Bolt, Claude or Figma Make look like the customer built them.
 
@@ -15,8 +15,8 @@ One URL in. Out: `DESIGN.md` (design tokens plus usage prose), the official logo
 **Claude Code**
 
 ```bash
-git clone https://github.com/camaustin1025/brand-kit.git
-./brand-kit/scripts/install-claude-code.sh
+git clone https://github.com/camaustin1025/brand-pack.git
+./brand-pack/scripts/install-claude-code.sh
 ```
 
 Then in a new session: `/brand-pack https://<customer-site>/`
