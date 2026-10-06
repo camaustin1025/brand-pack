@@ -9,9 +9,8 @@ One URL in. Out: `DESIGN.md` (design tokens plus usage prose), the official logo
 **claude.ai (web, desktop, Cowork)**
 
 1. [Download brand-pack.zip](https://github.com/camaustin1025/brand-pack/raw/main/dist/brand-pack.zip). Use this link, not the green Code > Download ZIP button: that zips the whole repo, and claude.ai rejects it with a nested-files error.
-2. Upload `brand-pack.zip` as is. Don't unzip it or re-zip it.
-3. In claude.ai go to Settings, then Skills, and upload the zip.
-4. In any chat, paste a URL and say "brand pack for this site".
+2. In claude.ai go to Settings, then Skills, and upload `brand-pack.zip` as is. Don't unzip it or re-zip it.
+3. In any chat, paste a URL and say "brand pack for this site".
 
 **Claude Code**
 
