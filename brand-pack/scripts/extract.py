@@ -4,16 +4,20 @@ extract.py - deterministic brand extraction from a website. Standard library onl
 
 Usage:
     python3 extract.py <url> --out <work-dir> [--press-url URL] [--max-css 25] [--products 12]
+    python3 extract.py <url> --out <work-dir> --mirror mirror-1.json [--mirror mirror-2.json] [--rendered]
 
 Writes:
     <work-dir>/candidates.json          every measured value with provenance
     <work-dir>/raw/index.html           homepage HTML as fetched
     <work-dir>/raw/styles/NN.css        each stylesheet, numbered
     <work-dir>/raw/logo-candidates/     downloaded logo candidates
+    <work-dir>/missing-urls.json        with --mirror: URLs the mirror did not have (feed back to capture.js)
 
 The script measures. It never decides. Selection happens in selections.json (see references/selection-rules.md).
 """
 import argparse
+import base64
+import hashlib
 import json
 import os
 import re
@@ -112,8 +116,87 @@ def chrome_fetch(url, timeout=45):
     return out
 
 
+# Cowork and claude.ai sandboxes often cannot reach customer sites. scripts/capture.js runs in the user's browser and
+# saves what it fetched to one JSON file: {url: {"status", "ctype", "body", "b64"?, "final"?, "error"?}, "__rendered__": {...}}.
+# With --mirror, every fetch reads from those files instead of the network, and URLs they lack are logged for another pass.
+_mirror = {"pages": None, "rendered": None, "meta": {}, "missing": [], "hits": 0, "unverified": []}
+
+
+def _utf8(s):
+    try:
+        return s.encode("utf-8")
+    except UnicodeEncodeError:  # lone surrogates: the browser's TextEncoder writes U+FFFD for them
+        return s.encode("utf-16", "surrogatepass").decode("utf-16", "replace").encode("utf-8")
+
+
+def mirror_digest(data):
+    """Same SHA-256 capture.js stamps into __meta__.digest: every entry's url, status and body, in file order."""
+    h = hashlib.sha256()
+    for url, entry in data.items():
+        if url == "__meta__" or not isinstance(entry, dict):
+            continue
+        status = entry.get("status")
+        h.update(_utf8(f"{url}\n{'' if status is None else status}\n{entry.get('body') or ''}\n"))
+    return h.hexdigest()
+
+
+def _mkey(url):
+    """Lookup key that ignores scheme, a leading www., an empty path and the fragment."""
+    p = urlparse(url.split("#")[0])
+    host = (p.hostname or "").lower().removeprefix("www.")
+    return f"{host}{p.path or '/'}" + (f"?{p.query}" if p.query else "")
+
+
+def load_mirrors(paths):
+    pages = {}
+    for path in paths:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        if (data.get("__meta__") or {}).get("digest") != mirror_digest(data):
+            _mirror["unverified"].append(os.path.basename(path))
+        if "__rendered__" in data:
+            _mirror["rendered"] = data["__rendered__"]
+        _mirror["meta"] = data.get("__meta__") or _mirror["meta"]
+        for url, entry in data.items():
+            if url.startswith("__") or not isinstance(entry, dict):
+                continue
+            key = _mkey(url)
+            if key in pages and pages[key].get("status") == 200:  # a later pass never overwrites a good copy
+                continue
+            pages[key] = dict(entry, _url=url)
+    _mirror["pages"] = pages
+    return pages
+
+
+def mirror_fetch(url, binary=False, max_bytes=6_000_000, **_):
+    if url.lower().startswith("data:"):  # inline data needs no network; capture.js never stores it
+        try:
+            return fetch(url, binary=binary, max_bytes=max_bytes)
+        except Exception as e:  # noqa: BLE001
+            return None, url, f"error: {e.__class__.__name__}: {e}"
+    entry = _mirror["pages"].get(_mkey(url))
+    if entry is None:
+        if url not in _mirror["missing"]:
+            _mirror["missing"].append(url)
+        return None, url, "error: not in mirror"
+    status = int(entry.get("status") or 0)
+    if entry.get("error") or not 200 <= status < 300:  # capture.js tried and failed: same as a failed fetch
+        return None, url, f"error: HTTP {status} in mirror" + (f" ({entry['error']})" if entry.get("error") else "")
+    _mirror["hits"] += 1
+    body = entry.get("body") or ""
+    if entry.get("b64"):
+        data = base64.b64decode(body)[:max_bytes]
+        if not binary:
+            data = data.decode("utf-8", errors="replace")
+    else:
+        data = body.encode("utf-8")[:max_bytes] if binary else body[:max_bytes]
+    return data, entry.get("final") or entry["_url"], entry.get("ctype") or ""
+
+
 def safe_fetch(url, **kw):
     """urllib first; on a bot challenge (Cloudflare etc.) fall back to headless Chrome for HTML and JSON."""
+    if _mirror["pages"] is not None:
+        return mirror_fetch(url, **kw)
     try:
         data, final, ctype = fetch(url, **kw)
         blocked = False
@@ -1074,6 +1157,8 @@ def main():
     ap.add_argument("--max-css", type=int, default=25)
     ap.add_argument("--products", type=int, default=12)
     ap.add_argument("--html", default=None, help="Use this saved HTML (e.g. raw/rendered.html from render.py dom) instead of fetching the homepage")
+    ap.add_argument("--mirror", action="append", default=[], help="capture.js output; read every URL from it instead of the network (repeat for later passes)")
+    ap.add_argument("--rendered", action="store_true", help="With --mirror, read the homepage from the browser's rendered DOM (JS-rendered sites)")
     args = ap.parse_args()
 
     out = args.out
@@ -1084,18 +1169,40 @@ def main():
     origin = normalize_origin(args.url)
     notes = []
     t0 = time.time()
+    if args.mirror:
+        load_mirrors(args.mirror)
+        notes.append(f"Offline run from browser mirror ({', '.join(os.path.basename(m) for m in args.mirror)}); nothing fetched from the network.")
+        if _mirror["unverified"]:
+            notes.append(f"UNVERIFIED mirror: {', '.join(_mirror['unverified'])} is not untouched capture.js output (digest missing or "
+                         "does not match). Values read from it are not measured; recapture with capture.js.")
+        site = _mkey(origin + "/").split("/")[0]
+        if not any(k.split("/")[0] == site for k in _mirror["pages"]):  # never measure one site's capture as another's
+            hosts = sorted({k.split("/")[0] for k in _mirror["pages"]})[:5]
+            print(json.dumps({"status": "error", "message": f"The mirror has no pages from {site}; it holds {', '.join(hosts) or 'nothing'}.",
+                              "hint": "Run capture.js in a tab open on this site, or pass the URL capture.js ran on."}))
+            sys.exit(2)
 
+    rendered = _mirror["rendered"] if args.mirror else None
+    home_entry = _mirror["pages"].get(_mkey(origin + "/")) if args.mirror else None
     if args.html:
         html = open(args.html, encoding="utf-8", errors="replace").read()
         final_url, ctype = origin + "/", "text/html (from --html file)"
         notes.append(f"Homepage HTML read from {args.html} (rendered DOM), not fetched.")
+    elif rendered and (args.rendered or home_entry is None):
+        html = rendered.get("body") or ""
+        final_url = (home_entry or {}).get("final") or (home_entry or {}).get("_url") or _mirror["meta"].get("origin", origin).rstrip("/") + "/"
+        ctype = "text/html (rendered DOM from browser mirror)"
+        notes.append("Homepage HTML is the browser's rendered DOM from the mirror.")
     else:
         html, final_url, ctype = safe_fetch(origin + "/")
+        hint = ("If this environment cannot reach the site (Cowork, claude.ai), use the browser mirror: "
+                "see 'Site can't be reached' in SKILL.md.") if not args.mirror else \
+               "The mirror has no homepage for this URL. Check the URL matches the site capture.js ran on."
         if html is None:
-            print(json.dumps({"status": "error", "message": f"Could not fetch {origin}: {ctype}"}))
+            print(json.dumps({"status": "error", "message": f"Could not fetch {origin}: {ctype}", "hint": hint}))
             sys.exit(2)
         if str(ctype).startswith("error"):
-            print(json.dumps({"status": "error", "message": ctype}))
+            print(json.dumps({"status": "error", "message": ctype, "hint": hint}))
             sys.exit(2)
     final_origin = normalize_origin(final_url)
     with open(os.path.join(raw, "index.html"), "w", encoding="utf-8") as f:
@@ -1812,6 +1919,14 @@ def main():
     for n_ in notes:
         print("note: " + n_)
     print(f"wrote {os.path.join(out, 'candidates.json')}")
+    if args.mirror:
+        missing_path = os.path.join(out, "missing-urls.json")
+        with open(missing_path, "w", encoding="utf-8") as f:
+            json.dump(_mirror["missing"], f, indent=1)
+        print(f"mirror: {_mirror['hits']} urls read, {len(_mirror['missing'])} missing -> {missing_path}"
+              + ("   (run capture.js again with these URLs, then rerun with every mirror file)" if _mirror["missing"] else ""))
+        if _mirror["unverified"]:
+            print(f"mirror: UNVERIFIED {', '.join(_mirror['unverified'])} (not untouched capture.js output; recapture before building)")
 
 
 if __name__ == "__main__":

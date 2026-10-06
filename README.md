@@ -58,6 +58,7 @@ Tested across Shopify (standard and headless), Magento, BigCommerce, Salesforce 
 - Radii, sizes, weights and padding are not provenance-checked, only colors, fonts, logos and quoted copy.
 - Cookie banners can cover part of a screenshot.
 - Sites that block headless browsers get `visual check: blocked`; open them in a normal browser to confirm.
+- In Cowork, when the workspace can't reach outside websites, the skill reads the site through Cowork's browser instead (`scripts/capture.js`) and builds the pack from that capture, without screenshots. claude.ai chat has no browser, so there it needs a workspace admin to allow outside sites.
 
 ## Use
 
