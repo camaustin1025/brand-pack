@@ -50,7 +50,7 @@ Third-party marks (payment, social, financing, review badges, press logos, certi
 
 ## Coverage
 
-Tested across Shopify (standard and headless), Magento, BigCommerce, Salesforce Commerce Cloud, and Tailwind, Nuxt and Builder.io front ends, including sites behind Cloudflare or bot walls, sites that serve logos as inline SVG or SVG sprites, and sites with licensed fonts (Adobe Fonts and self-hosted foundry files, which the pack names and substitutes rather than bundles).
+Tested across Shopify (standard and headless), Magento, BigCommerce, Salesforce Commerce Cloud, and Tailwind, Nuxt and Builder.io front ends, including sites requiring browser rendering, sites that serve logos as inline SVG or SVG sprites, and sites using Adobe Fonts or self-hosted fonts. The pack names detected font families and recommends similar Google Fonts alternatives when licensing is uncertain; it does not bundle font files or verify license agreements.
 
 ## Known gaps
 
@@ -62,7 +62,11 @@ Tested across Shopify (standard and headless), Magento, BigCommerce, Salesforce 
 
 ## Use
 
-Packs are for mockups and demos shown to that customer or prospect. Do not publish them, and do not commit them to this repo.
+Use only publicly accessible, signed-out website pages. Respect site terms and access restrictions; stop when access is denied. Do not capture account, admin, checkout, or other private pages, or bypass logins, paywalls, CAPTCHA, or other access controls.
+
+Packs are for private mockups and demos shown to that customer or prospect. Use extracted materials only where you have permission or another valid basis. Brand assets remain subject to their owners' rights; sharing this tool does not grant rights to those assets. Do not publish packs or branded demos without appropriate permission, and do not commit customer material to this repo.
+
+Browser mirror files can contain raw page HTML and rendered content. Keep them private, review them before sharing or uploading them, and delete them when no longer needed. Font-source detection and suggested substitutes are design guidance, not licensing clearance; verify the terms of any font you use.
 
 ## Maintain
 

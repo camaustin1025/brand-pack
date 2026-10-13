@@ -347,8 +347,8 @@ def main():
         st = info.get("status", "unknown")
         sub = info.get("google_fonts_substitute")
         note = info.get("note", "")
-        if st in ("licensed", "self-hosted-licensed", "proprietary", "adobe-fonts", "monotype"):
-            lic_lines.append(f"- **{fam}**: licensed, not bundled in this pack. Closest free substitute: **{sub or 'none identified'}**. {note}".rstrip())
+        if st in ("licensed", "self-hosted-licensed", "proprietary", "adobe-fonts", "monotype", "unknown"):
+            lic_lines.append(f"- **{fam}**: usage terms need verification. Font files are not bundled. Recommended similar Google Fonts alternative: **{sub or 'none identified'}**. {note}".rstrip())
         elif st == "google-fonts":
             lic_lines.append(f"- **{fam}**: Google Fonts. Load it directly. {note}".rstrip())
         else:
@@ -379,6 +379,7 @@ def main():
     body.append(f"- **Fallback stack**: {fallback_stack}")
     if lic_lines:
         body.append("\nLicensing:\n" + "\n".join(lic_lines))
+        body.append("\nFont-source classifications and substitute suggestions are design guidance, not licensing clearance. Verify the terms of any font you use.")
     if S.get("typography_prose"):
         body.append("\n" + S["typography_prose"].strip())
     body.append("")
@@ -441,7 +442,7 @@ def main():
                    "products": products}, open(os.path.join(out, "products.json"), "w", encoding="utf-8"), indent=2, ensure_ascii=False)
 
     # ---------------- README.md
-    lic_flag = [f for f, i in licensing.items() if i.get("status") in ("licensed", "self-hosted-licensed", "proprietary", "adobe-fonts", "monotype")]
+    lic_flag = [f for f, i in licensing.items() if i.get("status", "unknown") in ("licensed", "self-hosted-licensed", "proprietary", "adobe-fonts", "monotype", "unknown")]
     def fam_of(role):
         return (typography.get(role, {}).get("fontFamily") or "").split(",")[0].strip().strip("'\"")
 
@@ -449,9 +450,10 @@ def main():
         if not fam:
             return ""
         info = licensing.get(fam) or {}
-        if info.get("status") in ("licensed", "self-hosted-licensed", "proprietary", "adobe-fonts"):
-            sub = info.get("google_fonts_substitute") or "the closest free equivalent"
-            return f"{roles_label} use {fam} (licensed; substitute {sub} and match the weights and letter-spacing in DESIGN.md)."
+        if info.get("status", "unknown") in ("licensed", "self-hosted-licensed", "proprietary", "adobe-fonts", "monotype", "unknown"):
+            sub = info.get("google_fonts_substitute")
+            recommendation = f"recommended similar alternative: {sub}" if sub else "no alternative identified"
+            return f"{roles_label} use {fam} on the source site (usage terms unverified; {recommendation}). Verify font terms before use and follow the weights and letter-spacing in DESIGN.md."
         return f"{roles_label} use {fam}."
 
     display_fam, body_fam = fam_of("display") or fam_of("heading"), fam_of("body")
@@ -473,7 +475,8 @@ def main():
         + (" Use real product names, prices and images from products.json instead of placeholder products." if products else "")
         + f" Copy should match the voice samples in voice.md: {case_rule}, short, direct.")
     rd = [f"# {brand} brand pack\n",
-          f"Measured from {origin} on {today}. Built for on-brand mockups and demos shown to {brand}. Internal and prospect-facing use only; do not publish.\n",
+          f"Measured from {origin} on {today}. Built for private, on-brand mockups and demos shown to {brand}. Do not publish without appropriate permission.\n",
+          "Use only publicly accessible, signed-out pages and respect site terms and access restrictions. Use extracted materials only with permission or another valid basis; their owners retain their rights. Do not publish branded demos without appropriate permission. Keep raw browser captures private and review them before sharing or uploading.\n",
           "## What is inside\n",
           "| File | Use |\n|---|---|",
           "| `DESIGN.md` | Design system in the DESIGN.md spec. Paste into Lovable Knowledge, or drop at the project root for tools that read it. |",
@@ -490,9 +493,8 @@ def main():
           "| Area | Status |\n|---|---|"] + [f"| {k} | {v} |" for k, v in conf.items()] + [
           "",
           ("Inferred values (not measured on the site):\n" + "\n".join(f"- {x}" for x in inferred) + "\n") if inferred else "",
-          ("Font licensing: " + (lic_flag[0] + " is" if len(lic_flag) == 1 else ", ".join(lic_flag[:-1]) + " and " + lic_flag[-1] + " are")
-           + " licensed and not included. Use the " + ("substitute" if len(lic_flag) == 1 else "substitutes")
-           + " named in DESIGN.md and match weight and letter-spacing.\n") if lic_flag else "",
+          ("Font terms need verification: " + ", ".join(lic_flag)
+           + ". Font files are not included. DESIGN.md names recommended similar alternatives; these are design suggestions, not licensing clearance. Verify terms before use and match weight and letter-spacing.\n") if lic_flag else "",
           "## Load into Lovable (3 steps)\n",
           "1. Open the project. Settings, then Knowledge. Paste the full contents of `DESIGN.md` and save.",
           "2. Upload the files in `logo/` (attach them in chat, or add them under `public/brand/`)." + (" Upload `products.json` the same way." if products else ""),
@@ -522,7 +524,7 @@ def main():
     print(f"pack: {out}")
     print(f"logo: {conf['logo']} ({logo_paths['primary'][1]['source'] if logo_paths['primary'][1] else 'supplied'}) -> {', '.join(logo_files.values())}")
     print(f"colors: {conf['colors']} ({len(colors)} tokens) | typography: {conf['typography']} ({', '.join(sorted({v['family'] for v in typo_prov.values()}))})"
-          + (f" | licensed: {', '.join(lic_flag)}" if lic_flag else ""))
+          + (f" | font terms unverified: {', '.join(lic_flag)}" if lic_flag else ""))
     print(f"products: {conf['products']} ({len(products)}) | visual check: {conf['visual_check']} | screenshots: {len(shots)}")
     print(f"inferred: {len(inferred)}" + (" -> " + "; ".join(inferred) if inferred else ""))
     if zpath:

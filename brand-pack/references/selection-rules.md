@@ -53,7 +53,8 @@ Roles: `display` (hero headlines), `heading` (section titles), `body`, `label` (
 - `fontSize` for display and heading: write a `clamp()` from the measured mobile and desktop sizes, for example `clamp(2.5rem, 7vw, 6.4rem)` for 40px mobile and 102px desktop. Sizes come from `typography.headings` on classic sites and from `typography.large_type` on utility-class sites, where each entry lists `font_sizes` (desktop first, then media-query sizes), tracking, line-height and the verbatim text it styles.
 - `fontWeight` only when a rule declares it. A weight read from the screenshot goes in `typography_prose` as a visual read, not in the token.
 - `fallback_stack`: the rest of the measured `font-family` stack after the brand family.
-- `licensing` entry per family, with `status` one of `google-fonts` (a `fonts.googleapis.com` link was measured), `adobe-fonts` (typekit), `self-hosted-licensed` (`@font-face` pointing at the site's own files and the family is not on Google Fonts), `system` (Arial, Helvetica, system-ui). For anything not `google-fonts` or `system`, name a `google_fonts_substitute` that matches the family's width, x-height and personality, and say in `note` why. The substitute is a recommendation, not a token; the pack still names the real family.
+- Record a `licensing` entry per family. Use `google-fonts` when a Google Fonts source was measured, `adobe-fonts` for Typekit/Adobe hosting, `system` for system fonts, `self-hosted-licensed` only when documented terms support that classification, and `unknown` when terms were not verified. Source detection alone does not establish permission, and a self-hosted font absent from Google Fonts is not necessarily proprietary. Explain the evidence and uncertainty in `note`; do not claim a license agreement was checked unless it was.
+- For fonts with potentially restricted or unverified terms, recommend a similar `google_fonts_substitute` based on width, x-height and personality, and explain the recommendation in `note`. The substitute is design guidance, not a guaranteed closest match or licensing clearance. It is not a measured token; the pack still names the real family. Verify the terms of the substitute before use.
 
 Type scales defined as CSS variables (`--text-f4: 40px`, `--text-desktop-f4: 56px`) are resolved automatically; the `large_type` entry for the desktop variant inherits family, weight and transform from its base class. When the site loads only specific weights (for example 450 and 500), say so in `typography_prose` and do not specify weights the site never loads.
 
@@ -115,7 +116,7 @@ Values below are fictional (Northwind Roasters, northwind.example) and only show
     "label":   {"fontFamily": "Brand Sans", "fontWeight": 500, "fontSize": "14px", "letterSpacing": "-0.02em"},
     "fallback_stack": "'Helvetica Neue', Helvetica, Arial, sans-serif",
     "licensing": {
-      "Brand Sans": {"status": "self-hosted-licensed", "google_fonts_substitute": "Inter Tight", "note": "Neo-grotesque with tight headline tracking; Inter Tight for display, Inter for body."}
+      "Brand Sans": {"status": "unknown", "google_fonts_substitute": "Inter Tight", "note": "Self-hosted family; usage terms not verified. Similar neo-grotesque alternative: Inter Tight for display, Inter for body."}
     }
   },
   "typography_prose": "Optional paragraph.",
